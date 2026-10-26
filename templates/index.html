@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Flood Early Warning System</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;background:#f4f6f9;color:#1b2430}
+header{background:#1b3a5c;color:#fff;padding:14px 22px}header small{opacity:.8}
+main{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}@media(max-width:900px){main{grid-template-columns:1fr}}
+.card{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px #0002}
+#map{height:380px;border-radius:8px}.badge{display:inline-block;padding:4px 12px;border-radius:14px;color:#fff;font-weight:700}
+label{display:block;font-size:13px;margin-top:8px}input,select{width:100%;padding:6px;box-sizing:border-box}
+button{margin-top:12px;padding:8px 16px;background:#1b3a5c;color:#fff;border:0;border-radius:6px;cursor:pointer}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.muted{color:#667;font-size:12px}
+</style></head><body>
+<header><b>AI-Based Flood Risk Prediction &amp; Early Warning</b><br><small>Live rain forecast + GloFAS river discharge via Open-Meteo. Auto-refresh every 10 min.</small></header>
+<main>
+<section class="card" style="grid-column:1/-1"><div id="map"></div></section>
+<section class="card"><h3>Live assessment: <span id="locname">select a point on the map</span></h3>
+<div id="out" class="muted">Click a marker.</div><canvas id="chart" height="150"></canvas></section>
+<section class="card"><h3>What-if (manual inputs, mm of rain)</h3>
+<div class="grid">
+<div><label>Rain today<input id="rain_1d" type="number" value="0" min="0"></label></div>
+<div><label>Rain last 3 days<input id="rain_3d" type="number" value="0" min="0"></label></div>
+<div><label>Rain last 7 days<input id="rain_7d" type="number" value="0" min="0"></label></div>
+<div><label>Rain last 30 days<input id="rain_30d" type="number" value="0" min="0"></label></div>
+<div><label>Forecast tomorrow<input id="rain_next_1d" type="number" value="0" min="0"></label></div>
+<div><label>Forecast next 3 days<input id="rain_next_3d" type="number" value="0" min="0"></label></div>
+<div><label>River level (% of 2-year flood level)<input id="river_pct" type="number" value="30" min="0"></label></div>
+<div><label>Elevation (m)<input id="elevation" type="number" value="50"></label></div></div>
+<button onclick="whatif()">Assess</button><div id="wout" style="margin-top:12px"></div></section>
+</main>
+<script>
+const COL={None:'#8793a1',Low:'#2e9e5b',Moderate:'#d9a400',High:'#e8742a',Critical:'#c62828',Unavailable:'#444'};
+const map=L.map('map').setView([21,80],5);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'}).addTo(map);
+let markers={},chart;
+const badge=l=>`<span class="badge" style="background:${COL[l]||'#444'}">${l==='None'?'NO RISK':l.toUpperCase()}</span>`;
+async function overview(){
+  const d=await (await fetch('/api/overview')).json();
+  d.forEach(p=>{ if(markers[p.slug]) map.removeLayer(markers[p.slug]);
+    markers[p.slug]=L.circleMarker([p.lat,p.lon],{radius:10,color:'#fff',weight:2,fillColor:COL[p.level]||'#444',fillOpacity:.95})
+      .addTo(map).bindTooltip(p.name+': '+p.level).on('click',()=>show(p.slug));});
+}
+async function show(slug){
+  const r=await fetch('/api/live/'+slug); const d=await r.json();
+  if(d.error){document.getElementById('out').textContent='Error: '+d.error;return;}
+  document.getElementById('locname').textContent=d.name;
+  const f=d.features;
+  document.getElementById('out').innerHTML=`${badge(d.level)} <span class="muted">${d.gated?'dry-conditions rule applied (risk = 0)':'model score '+(d.score*100).toFixed(0)+'% (not a calibrated probability)'}</span>
+  <p>${d.advice}</p><p class="muted">Rain today ${f.rain_1d?.toFixed(1)} mm | 3d ${f.rain_3d?.toFixed(1)} | 7d ${f.rain_7d?.toFixed(1)} | forecast next 3d ${f.rain_next_3d?.toFixed(1)} mm | river at ${(f.q_over_q2*100).toFixed(0)}% of 2-yr flood level | ${d.today}</p>`;
+  const s=d.series; if(chart) chart.destroy();
+  chart=new Chart(document.getElementById('chart'),{data:{labels:s.map(x=>x.date.slice(5)),datasets:[
+    {type:'bar',label:'Rain (mm/day)',data:s.map(x=>x.rain),backgroundColor:'#6aa5e8',yAxisID:'y'},
+    {type:'line',label:'River / 2-yr flood level',data:s.map(x=>x.q_ratio),borderColor:'#c62828',yAxisID:'y1'}]},
+    options:{scales:{y:{title:{display:true,text:'mm'}},y1:{position:'right',grid:{drawOnChartArea:false},suggestedMax:1.2}}}});
+}
+async function whatif(){
+  const ids=['rain_1d','rain_3d','rain_7d','rain_30d','rain_next_1d','rain_next_3d','river_pct','elevation'];
+  const b={}; ids.forEach(i=>b[i]=parseFloat(document.getElementById(i).value)||0); b.rain_14d=b.rain_30d;
+  const d=await (await fetch('/api/whatif',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)})).json();
+  document.getElementById('wout').innerHTML=`${badge(d.level)}<p>${d.advice}</p>`;
+}
+overview(); setInterval(overview,600000);
+</script></body></html>

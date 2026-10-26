@@ -1,0 +1,50 @@
+{
+ "comparison": [
+  {
+   "Model": "Persistence (tomorrow = today)",
+   "Accuracy": 0.992,
+   "Macro F1": 0.719,
+   "Recall Moderate": 0.66,
+   "Recall High": 0.608,
+   "Recall Critical": 0.612,
+   "Precision High": 0.608
+  },
+  {
+   "Model": "Ordinal monotonic GBM (deployed)",
+   "Accuracy": 0.988,
+   "Macro F1": 0.548,
+   "Recall Moderate": 0.559,
+   "Recall High": 0.383,
+   "Recall Critical": 0.425,
+   "Precision High": 0.268
+  },
+  {
+   "Model": "Logistic Regression",
+   "Accuracy": 0.965,
+   "Macro F1": 0.486,
+   "Recall Moderate": 0.793,
+   "Recall High": 0.321,
+   "Recall Critical": 0.475,
+   "Precision High": 0.282
+  },
+  {
+   "Model": "Random Forest",
+   "Accuracy": 0.991,
+   "Macro F1": 0.554,
+   "Recall Moderate": 0.715,
+   "Recall High": 0.378,
+   "Recall Critical": 0.125,
+   "Precision High": 0.425
+  }
+ ],
+ "sanity": {
+  "dry_days_in_test": 20922,
+  "raw_model_alarm_rate_on_dry_days": 9.559315553006405e-05,
+  "final_system_nonzero_risk_on_dry_days": 0.0,
+  "alert_thresholds": [
+   0.2,
+   0.15000000000000002,
+   0.15000000000000002
+  ]
+ }
+}
